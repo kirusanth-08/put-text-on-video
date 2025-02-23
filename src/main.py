@@ -2,14 +2,18 @@ import cv2
 import os
 import numpy as np
 import time
-from fastapi import FastAPI, UploadFile, Form, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import cloudinary
 import cloudinary.uploader
 from dotenv import load_dotenv
-from typing import List
 import tempfile
-import shutil
+import requests
+from pydantic import BaseModel, HttpUrl
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 
 # Load environment variables
 load_dotenv()
@@ -32,6 +36,24 @@ cloudinary.config(
     api_key=os.getenv('CLOUDINARY_API_KEY'),
     api_secret=os.getenv('CLOUDINARY_API_SECRET')
 )
+
+class VideoRequest(BaseModel):
+    video_url: str
+    caption_text: str
+    font_choice: str = "FONT_HERSHEY_SIMPLEX"
+    font_size: float = 1.0
+
+def download_video(url: str, output_path: str):
+    try:
+        response = requests.get(url, stream=True)
+        response.raise_for_status()
+        
+        with open(output_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        return output_path
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=400, detail=f"Error downloading video: {str(e)}")
 
 def wrap_text(text, font_scale, thickness, max_width, font):
     words = text.split()
@@ -97,33 +119,37 @@ def add_text_captions(video_path: str, caption_text: str, font_choice: str, font
     return output_path
 
 @app.post("/process-video")
-async def process_video(
-    video: UploadFile,
-    caption_text: str = Form(...),
-    font_choice: str = Form("FONT_HERSHEY_SIMPLEX"),
-    font_size: float = Form(1.0)
-):
+async def process_video(request: VideoRequest):
     try:
-        # Create temporary directory
+        logging.info(f"Received request: {request}")
+        # Log request data
+        # logging.info(f"Received video URL: {request.video_url}")
+        # logging.info(f"Caption text: {request.caption_text}")
+        # logging.info(f"Font choice: {request.font_choice}")
+        # logging.info(f"Font size: {request.font_size}")
+
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Save uploaded video
-            temp_video_path = os.path.join(temp_dir, video.filename)
-            with open(temp_video_path, "wb") as buffer:
-                shutil.copyfileobj(video.file, buffer)
+            # Download video from URL
+            temp_video_path = os.path.join(temp_dir, "input_video.mp4")
+            download_video(str(request.video_url), temp_video_path)
             
             # Generate output path
             timestamp = int(time.time())
             output_filename = f"output_{timestamp}.mp4"
             output_path = os.path.join(temp_dir, output_filename)
             
+            logging.info(f"Processing video: {temp_video_path}")
+
             # Process video
             processed_video_path = add_text_captions(
                 temp_video_path,
-                caption_text,
-                font_choice,
-                font_size,
+                request.caption_text,
+                request.font_choice,
+                request.font_size,
                 output_path
             )
+            
+            logging.info(f"Uploading video to Cloudinary: {processed_video_path}")
             
             # Upload to Cloudinary
             upload_result = cloudinary.uploader.upload(
@@ -132,7 +158,9 @@ async def process_video(
                 folder="video_captions",
                 upload_preset=os.getenv('CLOUDINARY_UPLOAD_PRESET')
             )
-            
+
+            logging.info(f"Video uploaded successfully: {upload_result['secure_url']}")
+
             return {
                 "status": "success",
                 "video_url": upload_result["secure_url"],
@@ -140,6 +168,7 @@ async def process_video(
             }
             
     except Exception as e:
+        logging.error(f"Error processing video: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
