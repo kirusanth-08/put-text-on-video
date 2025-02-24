@@ -6,3 +6,4 @@ python-multipart
 cloudinary
 python-dotenv
 requests
+moviepy==1.0.3
