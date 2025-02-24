@@ -60,3 +60,4 @@ pythonenv*/
 .env.test
 .env.production
 .env.*
+.vercel
