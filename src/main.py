@@ -88,7 +88,7 @@ def get_font_path(font_choice: str, is_bold: bool, is_italic: bool) -> str:
 class VideoRequest(BaseModel):
     video_url: str
     caption_text: str
-    audio_url: str = None
+    audio_url: str | None = None
     font_choice: str = "default"  # Now accepts any key from AVAILABLE_FONTS
     font_size: float = 1.0
     vertical_position: float = 100.0  # 0 is top, 100 is bottom
@@ -183,7 +183,7 @@ def add_text_captions(video_path: str, caption_text: str, font_choice: str, font
         else:
             # Use custom TTF font
             try:
-                base_font_size = int(60 * font_size)  # Base size of 60px
+                base_font_size = int(1 * font_size)  # Base size of 60px
                 font = ImageFont.truetype(get_font_path(font_choice, is_bold, is_italic), base_font_size)
                 
                 # Create text overlay once
