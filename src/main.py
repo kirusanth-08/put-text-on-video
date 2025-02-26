@@ -183,7 +183,7 @@ def add_text_captions(video_path: str, caption_text: str, font_choice: str, font
         else:
             # Use custom TTF font
             try:
-                base_font_size = int(1 * font_size)  # Base size of 60px
+                base_font_size = int(2 * font_size)  # Base size of 60px
                 font = ImageFont.truetype(get_font_path(font_choice, is_bold, is_italic), base_font_size)
                 
                 # Create text overlay once
